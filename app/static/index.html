@@ -77,20 +77,32 @@ function mostrar(fc) {
   $('btnBaixar').hidden = false;
 }
 
-async function chamar(promessa) {
+async function chamar(url, opcoes = {}) {
   document.querySelectorAll('button').forEach(b => b.disabled = true);
-  $('status').textContent = 'Processando…';
+  const t0 = Date.now();
+  const ctrl = new AbortController();
+  const limite = setTimeout(() => ctrl.abort(), 240000);
+  const relogio = setInterval(() => {
+    const s = Math.round((Date.now() - t0) / 1000);
+    $('status').textContent = `Processando… ${s}s` + (s > 60 ? ' (servidor grátis acordando ou fazenda grande, aguarde)' : '');
+  }, 1000);
+  $('status').textContent = 'Processando… 0s';
   try {
-    const r = await promessa;
+    const r = await fetch(url, { ...opcoes, signal: ctrl.signal });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.statusText);
-    mostrar(j); $('status').textContent = 'Pronto.';
-  } catch (e) { $('status').textContent = 'Erro: ' + e.message; }
+    mostrar(j); $('status').textContent = `Pronto em ${Math.round((Date.now() - t0) / 1000)}s.`;
+  } catch (e) {
+    $('status').textContent = e.name === 'AbortError'
+      ? 'Passou de 4 minutos sem resposta. Tente de novo (o servidor já deve estar acordado).'
+      : 'Erro: ' + e.message;
+  }
+  clearInterval(relogio); clearTimeout(limite);
   document.querySelectorAll('button').forEach(b => b.disabled = false);
 }
 const params = () => `&sensibilidade=${$('sens').value}&area_min_ha=${$('amin').value}`;
 
-$('btnCar').onclick = () => chamar(fetch(`/talhoes?car=${encodeURIComponent($('car').value)}${params()}`));
+$('btnCar').onclick = () => chamar(`/talhoes?car=${encodeURIComponent($('car').value.trim())}${params()}`);
 
 $('btnDesenhar').onclick = () => {
   if (!desenhando) {
@@ -102,9 +114,9 @@ $('btnDesenhar').onclick = () => {
   if (pontos.length < 3) { $('status').textContent = 'Marque pelo menos 3 pontos.'; return; }
   const anel = pontos.map(p => [p.lng, p.lat]); anel.push(anel[0]);
   rascunho && rascunho.remove();
-  chamar(fetch('/talhoes', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  chamar('/talhoes', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ geometry: { type: 'Polygon', coordinates: [anel] },
-      sensibilidade: +$('sens').value, area_min_ha: +$('amin').value }) }));
+      sensibilidade: +$('sens').value, area_min_ha: +$('amin').value }) });
 };
 mapa.on('click', e => {
   if (!desenhando) return;
