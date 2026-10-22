@@ -25,7 +25,8 @@
   td.n { text-align: right; }
   /* Sem o retângulo de foco do navegador por cima dos talhões vizinhos */
   .leaflet-interactive:focus, .leaflet-container path:focus { outline: none; }
-  .leaflet-container { -webkit-tap-highlight-color: transparent; }
+  .leaflet-container, .leaflet-container * { -webkit-tap-highlight-color: transparent; }
+  .leaflet-container *:focus, .leaflet-container *:focus-visible { outline: none !important; }
   tr.sel td { background: #e3ead7; }
   tbody tr { cursor: pointer; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
@@ -56,7 +57,8 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const mapa = L.map('mapa').setView([-21.17, -47.81], 12);
+// Canvas: os talhões viram pixels, não elementos clicáveis do DOM — sem retângulo de foco/toque do navegador
+const mapa = L.map('mapa', { preferCanvas: true, renderer: L.canvas({ tolerance: 6 }) }).setView([-21.17, -47.81], 12);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   { maxZoom: 19, attribution: 'Imagem: Esri' }).addTo(mapa);
 let camada, perimetro, ultimo, desenhando = false, pontos = [], rascunho;
