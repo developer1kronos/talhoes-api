@@ -23,6 +23,11 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
   td, th { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; }
   td.n { text-align: right; }
+  /* Sem o retângulo de foco do navegador por cima dos talhões vizinhos */
+  .leaflet-interactive:focus, .leaflet-container path:focus { outline: none; }
+  .leaflet-container { -webkit-tap-highlight-color: transparent; }
+  tr.sel td { background: #e3ead7; }
+  tbody tr { cursor: pointer; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
   @media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; } aside { border-right: 0; } }
 </style>
@@ -59,21 +64,43 @@ const $ = id => document.getElementById(id);
 const cor = c => c === 'talhão' ? getComputedStyle(document.documentElement).getPropertyValue('--talhao')
                                  : getComputedStyle(document.documentElement).getPropertyValue('--perene');
 
+let selecionado = null, porId = {};
+const estiloBase = f => ({ color: cor(f.properties.classe), weight: 2, opacity: 1, fillOpacity: .12 });
+
+// Destaca só o contorno real do talhão tocado (e a linha dele na tabela)
+function selecionar(id, centralizar) {
+  if (selecionado && porId[selecionado]) camada.resetStyle(porId[selecionado]);
+  selecionado = id;
+  const l = porId[id];
+  if (!l) return;
+  l.setStyle({ color: '#ffffff', weight: 4, fillColor: '#ffffff', fillOpacity: .35 });
+  l.bringToFront();
+  if (centralizar) mapa.fitBounds(l.getBounds(), { padding: [40, 40], maxZoom: 16 });
+  l.openTooltip();
+  document.querySelectorAll('#resumo tr[data-id]').forEach(tr => tr.classList.toggle('sel', tr.dataset.id === id));
+}
+
 function mostrar(fc) {
   ultimo = fc;
   camada && camada.remove(); perimetro && perimetro.remove();
   const im = fc.metadata.imovel;
   if (im && im.perimetro) perimetro = L.geoJSON(im.perimetro, { style: { color: '#fff', weight: 2, dashArray: '6 4', fill: false } }).addTo(mapa);
+  selecionado = null; porId = {};
   camada = L.geoJSON(fc, {
-    style: f => ({ color: cor(f.properties.classe), weight: 2, fillOpacity: .12 }),
-    onEachFeature: (f, l) => l.bindTooltip(`${f.properties.id} · ${f.properties.area_ha} ha · ${f.properties.classe}`)
+    style: estiloBase,
+    onEachFeature: (f, l) => {
+      porId[f.properties.id] = l;
+      l.bindTooltip(`${f.properties.id} · ${f.properties.area_ha} ha · ${f.properties.classe}`, { sticky: true });
+      l.on('click', () => selecionar(f.properties.id, false));
+    }
   }).addTo(mapa);
   mapa.fitBounds(camada.getBounds(), { padding: [20, 20] });
   const m = fc.metadata;
-  const linhas = fc.features.map(f => `<tr><td><span class="dot" style="background:${cor(f.properties.classe)}"></span>${f.properties.id}</td><td>${f.properties.classe}</td><td class="n">${f.properties.area_ha.toFixed(2)}</td></tr>`).join('');
+  const linhas = fc.features.map(f => `<tr data-id="${f.properties.id}"><td><span class="dot" style="background:${cor(f.properties.classe)}"></span>${f.properties.id}</td><td>${f.properties.classe}</td><td class="n">${f.properties.area_ha.toFixed(2)}</td></tr>`).join('');
   $('resumo').innerHTML = `<p><b>${m.qtd_talhoes}</b> talhões + ${m.qtd_outras_areas} outras áreas · ${m.area_total_ha} ha · ${m.tempo_s}s<br>
     Imagens: ${m.cenas.map(c => c.data).join(', ')}</p>
-    <table><tr><th>ID</th><th>Classe</th><th class="n">ha</th></tr>${linhas}</table>`;
+    <table><thead><tr><th>ID</th><th>Classe</th><th class="n">ha</th></tr></thead><tbody>${linhas}</tbody></table>`;
+  document.querySelectorAll('#resumo tr[data-id]').forEach(tr => tr.onclick = () => selecionar(tr.dataset.id, true));
   $('btnBaixar').hidden = false;
 }
 
